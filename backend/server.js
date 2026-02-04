@@ -6,45 +6,88 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ================== MYSQL CONNECTION (POOL) ================== */
-const db = mysql.createPool({
-  host: "localhost",
-  user: "root",
-  password: "Barangay123!",
-  database: "smart_barangay",
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
+/* ================== RAILWAY MYSQL CONNECTION ================== */
+let db;
 
-db.getConnection((err, conn) => {
-  if (err) {
-    console.log("❌ MySQL Connection Failed:", err.message);
-  } else {
-    console.log("✅ Connected to MySQL database");
-    conn.release();
-  }
-});
+try {
+  // Use Railway's MYSQL_URL or fallback to local for development
+  const mysqlUrl = process.env.MYSQL_URL || "mysql://root:Barangay123!@localhost:3306/smart_barangay";
+  
+  console.log("🔧 Initializing MySQL connection...");
+  
+  // Parse the MySQL URL
+  const url = new URL(mysqlUrl);
+  const dbConfig = {
+    host: url.hostname,
+    port: url.port || 3306,
+    user: url.username,
+    password: url.password,
+    database: url.pathname.replace('/', ''),
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    ssl: { rejectUnauthorized: false } // Required for Railway
+  };
+  
+  console.log("📋 Database Configuration:");
+  console.log(`   Host: ${dbConfig.host}`);
+  console.log(`   Port: ${dbConfig.port}`);
+  console.log(`   Database: ${dbConfig.database}`);
+  console.log(`   User: ${dbConfig.user}`);
+  
+  db = mysql.createPool(dbConfig);
+  
+  // Test connection
+  db.getConnection((err, conn) => {
+    if (err) {
+      console.log("❌ MySQL Connection Failed:", err.message);
+      console.log("❌ Error code:", err.code);
+    } else {
+      console.log("✅ Connected to MySQL database successfully!");
+      conn.release();
+    }
+  });
+  
+} catch (error) {
+  console.error("🔥 Database initialization error:", error.message);
+  process.exit(1);
+}
 
 /* ================== ROUTES ================== */
 
-// Test route
+// Root endpoint
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: '✅ BACKEND SERVER IS RUNNING!',
-    port: 5000,
-    time: new Date().toLocaleString()
+    message: '✅ Smart Barangay Backend is running!',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
-/* ================== DEBUG DATABASE ================== */
+// Health check
+app.get('/health', async (req, res) => {
+  try {
+    const [result] = await db.promise().query('SELECT 1 + 1 AS test');
+    res.json({
+      success: true,
+      database: 'connected',
+      testResult: result[0].test,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      database: 'disconnected',
+      error: error.message
+    });
+  }
+});
+
+// Debug database
 app.get('/api/debug-db', async (req, res) => {
   try {
-    // Test connection
     const [test] = await db.promise().query('SELECT 1 as test');
-    
-    // Get all users
     const [users] = await db.promise().query(
       'SELECT id, first_name, email, status FROM users ORDER BY id DESC'
     );
@@ -67,13 +110,10 @@ app.get('/api/debug-db', async (req, res) => {
   }
 });
 
-/* ================== CHECK TABLE STRUCTURE ================== */
+// Check table structure
 app.get('/api/check-table', async (req, res) => {
   try {
-    // Check users table structure
     const [structure] = await db.promise().query('DESCRIBE users');
-    
-    // Check all status values
     const [statusValues] = await db.promise().query(
       'SELECT DISTINCT status, COUNT(*) as count FROM users GROUP BY status'
     );
@@ -93,7 +133,7 @@ app.get('/api/check-table', async (req, res) => {
   }
 });
 
-/* ================== CITIZEN LOGIN ================== */
+// Citizen login
 app.post("/citizen-login", async (req, res) => {
   const { email, password } = req.body;
   console.log("🔐 Login attempt:", email);
@@ -132,7 +172,7 @@ app.post("/citizen-login", async (req, res) => {
   }
 });
 
-/* ================== SIGNUP ================== */
+// Signup
 app.post("/signup", async (req, res) => {
   const { full_name, email, password } = req.body;
 
@@ -157,7 +197,7 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-/* ================== ADMIN LOGIN ================== */
+// Admin login
 app.post("/admin-login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -192,22 +232,9 @@ app.post("/admin-login", async (req, res) => {
   }
 });
 
-/* ================== DEBUG USERS ================== */
-app.get("/debug-users", async (req, res) => {
-  try {
-    const [users] = await db.promise().query(
-      "SELECT id, first_name, email, role, status FROM users ORDER BY id DESC"
-    );
-
-    res.json({ success: true, count: users.length, users });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/* ================== GET PENDING USERS ================== */
+// Get pending users
 app.get('/api/pending-users', async (req, res) => {
-  console.log("📥 Fetching pending users from database...");
+  console.log("📥 Fetching pending users...");
   
   try {
     const [rows] = await db.promise().query(
@@ -225,19 +252,11 @@ app.get('/api/pending-users', async (req, res) => {
   }
 });
 
-/* ================== APPROVE USER - ENHANCED ================== */
+// Approve user
 app.post('/api/approve-user', async (req, res) => {
   const { userId } = req.body;
   
-  console.log('\n' + '='.repeat(50));
-  console.log(`✅ APPROVE USER REQUEST RECEIVED`);
-  console.log('='.repeat(50));
-  console.log(`📦 Request body:`, req.body);
-  console.log(`👤 User ID to approve: ${userId}`);
-  console.log('='.repeat(50));
-  
   if (!userId) {
-    console.log(`❌ ERROR: No userId provided`);
     return res.status(400).json({ 
       success: false, 
       error: 'User ID is required' 
@@ -245,94 +264,50 @@ app.post('/api/approve-user', async (req, res) => {
   }
   
   try {
-    // Check if user exists first
-    console.log(`🔍 Checking if user ${userId} exists...`);
     const [check] = await db.promise().query(
       'SELECT id, first_name, email, status FROM users WHERE id = ?',
       [userId]
     );
     
-    console.log(`📊 User check result:`, check);
-    
     if (check.length === 0) {
-      console.log(`❌ ERROR: User ${userId} not found in database`);
       return res.status(404).json({ 
         success: false, 
         error: `User ID ${userId} not found` 
       });
     }
     
-    console.log(`📋 User found:`, check[0]);
-    console.log(`📋 Current status: ${check[0].status}`);
+    const [result] = await db.promise().query(
+      'UPDATE users SET status = "approve" WHERE id = ?',
+      [userId]
+    );
     
-    // Update the user
-    console.log(`🔄 Updating user ${userId} status to "approve"...`);
-    const sql = 'UPDATE users SET status = "approve" WHERE id = ?';
-    console.log(`📝 SQL: ${sql}`);
-    console.log(`📝 Parameter: ${userId}`);
-    
-    const [result] = await db.promise().query(sql, [userId]);
-    
-    console.log(`📊 UPDATE RESULT:`, result);
-    console.log(`✅ Affected rows: ${result.affectedRows}`);
-    console.log(`✅ Changed rows: ${result.changedRows}`);
-    
-    if (result.affectedRows === 0) {
-      console.log(`⚠️ WARNING: No rows affected. User may already be approved.`);
-    }
-    
-    // Verify the update
-    console.log(`🔍 Verifying update...`);
     const [updated] = await db.promise().query(
       'SELECT id, first_name, email, status FROM users WHERE id = ?',
       [userId]
     );
-    
-    console.log(`✅ VERIFICATION RESULT:`, updated[0]);
-    console.log('='.repeat(50));
-    console.log(`🎉 APPROVE COMPLETED SUCCESSFULLY`);
-    console.log('='.repeat(50) + '\n');
     
     res.json({ 
       success: true, 
       message: 'User approved successfully',
       affectedRows: result.affectedRows,
-      changedRows: result.changedRows,
       user: updated[0]
     });
     
   } catch (error) {
-    console.error(`🔥 CRITICAL ERROR APPROVING USER ${userId}:`);
-    console.error(`  Error name: ${error.name}`);
-    console.error(`  Error message: ${error.message}`);
-    console.error(`  Error code: ${error.code}`);
-    console.error(`  SQL State: ${error.sqlState}`);
-    console.error(`  Full error:`, error);
-    console.log('='.repeat(50) + '\n');
-    
+    console.error(`❌ Error approving user ${userId}:`, error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to approve user',
-      details: error.message,
-      code: error.code,
-      sqlState: error.sqlState
+      details: error.message
     });
   }
 });
 
-/* ================== REJECT USER - ENHANCED ================== */
+// Reject user
 app.post('/api/reject-user', async (req, res) => {
   const { userId } = req.body;
   
-  console.log('\n' + '='.repeat(50));
-  console.log(`❌ REJECT USER REQUEST RECEIVED`);
-  console.log('='.repeat(50));
-  console.log(`📦 Request body:`, req.body);
-  console.log(`👤 User ID to reject: ${userId}`);
-  console.log('='.repeat(50));
-  
   if (!userId) {
-    console.log(`❌ ERROR: No userId provided`);
     return res.status(400).json({ 
       success: false, 
       error: 'User ID is required' 
@@ -340,112 +315,54 @@ app.post('/api/reject-user', async (req, res) => {
   }
   
   try {
-    // Check if user exists first
-    console.log(`🔍 Checking if user ${userId} exists...`);
     const [check] = await db.promise().query(
       'SELECT id, first_name, email, status FROM users WHERE id = ?',
       [userId]
     );
     
-    console.log(`📊 User check result:`, check);
-    
     if (check.length === 0) {
-      console.log(`❌ ERROR: User ${userId} not found in database`);
       return res.status(404).json({ 
         success: false, 
         error: `User ID ${userId} not found` 
       });
     }
     
-    console.log(`📋 User found:`, check[0]);
-    console.log(`📋 Current status: ${check[0].status}`);
+    const [result] = await db.promise().query(
+      'UPDATE users SET status = "reject" WHERE id = ?',
+      [userId]
+    );
     
-    // Try to update - TRY BOTH 'rejected' and 'reject'
-    console.log(`🔄 Updating user ${userId} status to "rejected"...`);
-    
-    let result;
-    let statusUsed = 'rejected';
-    
-    try {
-      // First try 'rejected'
-      const sql = 'UPDATE users SET status = ? WHERE id = ?';
-      console.log(`📝 SQL: ${sql}`);
-      console.log(`📝 Parameters: ["${statusUsed}", ${userId}]`);
-      
-      [result] = await db.promise().query(sql, [statusUsed, userId]);
-      
-    } catch (sqlError) {
-      console.log(`⚠️ First attempt failed, trying 'reject' instead...`);
-      statusUsed = 'reject';
-      
-      const sql = 'UPDATE users SET status = ? WHERE id = ?';
-      console.log(`📝 SQL: ${sql}`);
-      console.log(`📝 Parameters: ["${statusUsed}", ${userId}]`);
-      
-      [result] = await db.promise().query(sql, [statusUsed, userId]);
-    }
-    
-    console.log(`📊 UPDATE RESULT:`, result);
-    console.log(`✅ Affected rows: ${result.affectedRows}`);
-    console.log(`✅ Changed rows: ${result.changedRows}`);
-    
-    if (result.affectedRows === 0) {
-      console.log(`⚠️ WARNING: No rows affected. User may already be rejected.`);
-    }
-    
-    // Verify the update
-    console.log(`🔍 Verifying update...`);
     const [updated] = await db.promise().query(
       'SELECT id, first_name, email, status FROM users WHERE id = ?',
       [userId]
     );
     
-    console.log(`✅ VERIFICATION RESULT:`, updated[0]);
-    console.log('='.repeat(50));
-    console.log(`🎉 REJECT COMPLETED SUCCESSFULLY`);
-    console.log('='.repeat(50) + '\n');
-    
     res.json({ 
       success: true, 
-      message: `User rejected successfully (status set to: ${statusUsed})`,
+      message: 'User rejected successfully',
       affectedRows: result.affectedRows,
-      changedRows: result.changedRows,
-      statusUsed: statusUsed,
       user: updated[0]
     });
     
   } catch (error) {
-    console.error(`🔥 CRITICAL ERROR REJECTING USER ${userId}:`);
-    console.error(`  Error name: ${error.name}`);
-    console.error(`  Error message: ${error.message}`);
-    console.error(`  Error code: ${error.code}`);
-    console.error(`  SQL State: ${error.sqlState}`);
-    console.error(`  Full error:`, error);
-    console.log('='.repeat(50) + '\n');
-    
+    console.error(`❌ Error rejecting user ${userId}:`, error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to reject user',
-      details: error.message,
-      code: error.code,
-      sqlState: error.sqlState
+      details: error.message
     });
   }
 });
 
-/* ================== DIRECT MANUAL UPDATE ================== */
+// Update status
 app.post('/api/update-status', async (req, res) => {
   const { userId, newStatus } = req.body;
-  
-  console.log(`🔄 Manual update: User ${userId} -> ${newStatus}`);
   
   try {
     const [result] = await db.promise().query(
       'UPDATE users SET status = ? WHERE id = ?',
       [newStatus, userId]
     );
-    
-    console.log(`✅ Manual update: ${result.affectedRows} rows affected`);
     
     res.json({ 
       success: true, 
@@ -454,7 +371,7 @@ app.post('/api/update-status', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Manual update error:', error);
+    console.error('❌ Update status error:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message 
@@ -462,17 +379,12 @@ app.post('/api/update-status', async (req, res) => {
   }
 });
 
-/* ================== TEST DIRECT SQL ================== */
+// Test SQL
 app.post('/api/test-sql', async (req, res) => {
   const { sql, params } = req.body;
   
-  console.log(`🧪 TEST SQL: ${sql}`);
-  console.log(`🧪 Parameters:`, params);
-  
   try {
     const [result] = await db.promise().query(sql, params || []);
-    
-    console.log(`✅ SQL Result:`, result);
     
     res.json({ 
       success: true, 
@@ -484,30 +396,34 @@ app.post('/api/test-sql', async (req, res) => {
     console.error('❌ SQL Error:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message,
-      sqlState: error.sqlState,
-      code: error.code
+      error: error.message
     });
   }
 });
 
 /* ================== START SERVER ================== */
-const PORT = 5000;
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, '0.0.0.0', () => {
   console.log('\n' + '='.repeat(60));
   console.log('🚀 BACKEND SERVER STARTED SUCCESSFULLY!');
-  console.log('📍 LOCAL:  http://localhost:' + PORT);
-  console.log('📡 Frontend should run on http://localhost:3000');
+  console.log(`📍 Port: ${PORT}`);
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log('='.repeat(60));
   console.log('\n📋 AVAILABLE ENDPOINTS:');
-  console.log('1. GET  http://localhost:' + PORT + '/');
-  console.log('2. GET  http://localhost:' + PORT + '/debug-users');
-  console.log('3. GET  http://localhost:' + PORT + '/api/debug-db');
-  console.log('4. GET  http://localhost:' + PORT + '/api/check-table');
-  console.log('5. GET  http://localhost:' + PORT + '/api/pending-users');
-  console.log('6. POST http://localhost:' + PORT + '/api/approve-user');
-  console.log('7. POST http://localhost:' + PORT + '/api/reject-user');
-  console.log('8. POST http://localhost:' + PORT + '/api/update-status');
-  console.log('9. POST http://localhost:' + PORT + '/api/test-sql');
+  console.log(`1. GET  http://localhost:${PORT}/`);
+  console.log(`2. GET  http://localhost:${PORT}/health`);
+  console.log(`3. GET  http://localhost:${PORT}/api/debug-db`);
+  console.log(`4. GET  http://localhost:${PORT}/api/check-table`);
+  console.log(`5. GET  http://localhost:${PORT}/api/pending-users`);
+  console.log(`6. POST http://localhost:${PORT}/citizen-login`);
+  console.log(`7. POST http://localhost:${PORT}/signup`);
+  console.log(`8. POST http://localhost:${PORT}/admin-login`);
   console.log('='.repeat(60));
+});
+
+// Handle shutdown gracefully
+process.on('SIGTERM', () => {
+  console.log('🛑 Shutting down server...');
+  if (db) db.end();
+  process.exit(0);
 });
