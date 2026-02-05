@@ -1,7 +1,6 @@
 // src/citizen/RegistrationAuth.js
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../api";
 import "./RegistrationAuth.css";
 import bg from "../assets/bg.jpg";
 
@@ -15,7 +14,7 @@ function RegistrationAuth() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Handle registration
+  // Handle registration - DIRECT FETCH to Railway backend
   const handleRegistration = async (e) => {
     e.preventDefault();
 
@@ -28,29 +27,46 @@ function RegistrationAuth() {
     setLoading(true);
 
     try {
-      const res = await api.post("/signup", {
-        full_name: fullName,
-        email,
-        password,
+      // DIRECT API call to Railway backend
+      const API_URL = process.env.REACT_APP_API_URL || 'https://smart-barangay-production.up.railway.app';
+      
+      console.log('Registering with:', API_URL); // Debug
+      
+      const response = await fetch(`${API_URL}/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          full_name: fullName,
+          email: email,
+          password: password
+        })
       });
 
-      // Check if registration is pending
-      if (res.data.message && res.data.message.toLowerCase().includes("pending")) {
-        alert(res.data.message);
-        setLoading(false);
-        // Stay on the registration form, don't navigate
-        // Optionally clear form or keep as is
-        return;
+      const data = await response.json();
+      console.log('Response:', data); // Debug
+
+      // Check if registration is successful
+      if (data.success) {
+        alert(data.message || "Registration successful - pending approval");
+        
+        // Clear form
+        setFullName("");
+        setEmail("");
+        setPassword("");
+        setConfirmPassword("");
+        
+        // Navigate to success page or stay on form
+        navigate("/registration-complete");
+      } else {
+        alert(data.error || "Registration failed");
       }
-
-      alert(res.data.message);
-      setLoading(false);
-
-      // Only redirect if not pending
-      navigate("/registration-complete");
+      
     } catch (err) {
-      console.error("API ERROR:", err.response?.data?.error || err.message);
-      alert(err.response?.data?.error || "Cannot connect to server or registration failed");
+      console.error("Registration error:", err);
+      alert("Cannot connect to server. Please try again.");
+    } finally {
       setLoading(false);
     }
   };
