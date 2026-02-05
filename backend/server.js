@@ -288,6 +288,109 @@ app.post('/api/reject-user', async (req, res) => {
   }
 });
 
+// ========== USER REGISTRATION ==========
+
+// Signup
+app.post("/signup", async (req, res) => {
+  const { full_name, email, password } = req.body;
+
+  console.log('📝 New registration:', { email, full_name });
+
+  try {
+    // Check if email already exists
+    const [existingUsers] = await db.promise().query(
+      "SELECT id FROM users WHERE email = ?",
+      [email]
+    );
+
+    if (existingUsers.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Email already exists" 
+      });
+    }
+
+    // Insert new user with pending status
+    const sql = `INSERT INTO users (first_name, email, password, status, role)
+                 VALUES (?, ?, ?, 'pending', 'citizen')`;
+
+    const [result] = await db.promise().query(sql, [full_name, email, password]);
+
+    console.log('✅ User registered:', result.insertId);
+    
+    res.json({
+      success: true,
+      message: "Registration successful - pending approval",
+      userId: result.insertId
+    });
+
+  } catch (err) {
+    console.error("❌ Registration error:", err);
+    
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Email already exists" 
+      });
+    }
+
+    res.status(500).json({ 
+      success: false, 
+      error: "Registration failed" 
+    });
+  }
+});
+
+// ========== ADMIN LOGIN ==========
+
+// Admin login
+app.post("/admin-login", async (req, res) => {
+  const { email, password } = req.body;
+
+  console.log('🔐 Admin login attempt:', email);
+
+  try {
+    const [users] = await db.promise().query(
+      "SELECT * FROM users WHERE email = ? AND role = 'admin'",
+      [email]
+    );
+
+    if (users.length === 0) {
+      return res.status(401).json({ 
+        success: false, 
+        error: "Admin not found" 
+      });
+    }
+
+    const user = users[0];
+
+    if (user.password !== password) {
+      return res.status(401).json({ 
+        success: false, 
+        error: "Incorrect password" 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Admin login successful",
+      admin: {
+        id: user.id,
+        first_name: user.first_name,
+        email: user.email,
+        role: user.role
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Admin login error:", err);
+    res.status(500).json({ 
+      success: false, 
+      error: "Server error" 
+    });
+  }
+});
+
 /* ========== START SERVER ========== */
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
