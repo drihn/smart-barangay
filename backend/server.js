@@ -127,38 +127,33 @@ app.get('/', (req, res) => {
 
 // Health check
 app.get('/health', async (req, res) => {
+  // SIGURADUHIN na JSON ang response
   try {
-    // Add CORS headers explicitly
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    
     if (!db) {
-      return res.status(500).json({
+      return res.status(500).json({  // DAPAT .json()
         success: false,
         status: 'unhealthy',
-        error: 'Database not connected',
-        timestamp: new Date().toISOString()
+        error: 'Database not connected'
       });
     }
 
     const [result] = await db.promise().query('SELECT 1 as test');
     const [users] = await db.promise().query('SELECT COUNT(*) as count FROM users');
     
-    res.json({
+    res.json({  // Gamitin ang res.json() hindi res.send()
       success: true,
       status: 'healthy',
       database: 'connected',
       test: result[0].test,
-      totalUsers: users[0].count,
-      timestamp: new Date().toISOString(),
-      cors: 'enabled'
+      totalUsers: users[0].count
     });
+    
   } catch (error) {
+    // DAPAT .json() din sa error
     res.status(500).json({
       success: false,
       status: 'unhealthy',
-      error: error.message,
-      timestamp: new Date().toISOString()
+      error: error.message
     });
   }
 });
