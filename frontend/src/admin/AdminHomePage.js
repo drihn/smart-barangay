@@ -16,34 +16,44 @@ export default function AdminHomePage() {
 
   // Fetch pending citizens from backend
   
-  const fetchPendingUsers = async () => {
-    setLoadingUsers(true);
-    try {
-      // Use the new endpoint from your server.js
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/pending-users`);
+ // I-update ang fetchPendingUsers function:
+const fetchPendingUsers = async () => {
+  setLoadingUsers(true);
+  try {
+    // TRY BOTH ENDPOINTS:
+    const API_URL = process.env.REACT_APP_API_URL;
+    
+    // Option 1: Try without /api
+    const response = await fetch(`${API_URL}/pending-users`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include" // IMPORTANT for sessions/cookies
+    });
+    
+    console.log("Pending users response:", response);
+    
+    if (response.ok) {
       const data = await response.json();
-      
-      if (response.ok && data.success) {
+      if (data.success) {
         setPendingUsers(data.users || []);
         setPendingCount(data.users?.length || 0);
-      } else {
-        console.error("Failed to fetch pending users:", data.error);
-        // Mock data for testing
-        const mockPendingUsers = [
-          { id: 1, first_name: "Test User 1", email: "test1@example.com" },
-          { id: 2, first_name: "Test User 2", email: "test2@example.com" }
-        ];
-        setPendingUsers(mockPendingUsers);
-        setPendingCount(mockPendingUsers.length);
       }
-    } catch (err) {
-      console.error("Failed to fetch pending users:", err);
-      setPendingUsers([]);
-      setPendingCount(0);
+    } else {
+      // Option 2: Try with /api
+      const response2 = await fetch(`${API_URL}/api/pending-users`);
+      if (response2.ok) {
+        const data2 = await response2.json();
+        if (data2.success) {
+          setPendingUsers(data2.users || []);
+          setPendingCount(data2.users?.length || 0);
+        }
+      }
     }
-    setLoadingUsers(false);
-  };
-
+  } catch (err) {
+    console.error("Failed to fetch pending users:", err);
+  }
+  setLoadingUsers(false);
+};
   // Approve or reject user
   const handleApproveReject = async (userId, approve) => {
     try {

@@ -17,7 +17,6 @@ function RegistrationAuth() {
  const handleRegistration = async (e) => {
   e.preventDefault();
 
-  // Check passwords match
   if (password !== confirmPassword) {
     alert("Passwords do not match!");
     return;
@@ -26,17 +25,17 @@ function RegistrationAuth() {
   setLoading(true);
 
   try {
-    // DIRECT API call to Railway backend
-    const API_URL = process.env.REACT_APP_API_URL || 'https://smart-barangay-production.up.railway.app';
-    
-    console.log('🌐 API URL:', API_URL);
-    console.log('📤 Sending:', { email, fullName });
+    const API_URL = process.env.REACT_APP_API_URL;
+    console.log('🔗 API URL:', API_URL);
     
     const response = await fetch(`${API_URL}/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
+      mode: 'cors', // Explicitly set CORS mode
+      credentials: 'same-origin', // or 'include' if using cookies
       body: JSON.stringify({
         full_name: fullName,
         email: email,
@@ -44,48 +43,38 @@ function RegistrationAuth() {
       })
     });
 
-    console.log('📥 Response status:', response.status);
+    console.log('📊 Response Status:', response.status);
+    console.log('📊 Response Headers:', response.headers);
     
-    // CHECK IF RESPONSE IS JSON FIRST
-    const contentType = response.headers.get('content-type');
+    const text = await response.text();
+    console.log('📊 Raw Response:', text);
     
-    if (!contentType || !contentType.includes('application/json')) {
-      // Not JSON - get as text
-      const text = await response.text();
-      console.error('❌ Server returned non-JSON:', text);
-      alert(`Server error: ${text.substring(0, 100)}`);
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error('❌ Failed to parse JSON:', parseError);
+      alert(`Server error (not JSON): ${text.substring(0, 200)}`);
       return;
     }
     
-    // Parse as JSON
-    const data = await response.json();
-    console.log('📦 Response data:', data);
+    console.log('📦 Parsed Data:', data);
 
-    // Check if registration is successful
     if (data.success) {
       alert(data.message || "Registration successful - pending approval");
-      
-      // Clear form
-      setFullName("");
-      setEmail("");
-      setPassword("");
-      setConfirmPassword("");
-      
-      // Navigate to success page
       navigate("/registration-complete");
     } else {
       alert(data.error || "Registration failed");
     }
     
   } catch (err) {
-    console.error("🔥 Registration error:", err);
-    console.error("🔥 Error details:", err.message);
-    
-    if (err.message.includes('JSON')) {
-      alert("Server returned invalid response. Check if /signup endpoint exists.");
-    } else {
-      alert("Cannot connect to server. Please try again.");
-    }
+    console.error("🔥 Network Error:", err);
+    console.error("🔥 Error Details:", {
+      message: err.message,
+      name: err.name,
+      stack: err.stack
+    });
+    alert("Cannot connect to server. Please try again.");
   } finally {
     setLoading(false);
   }
