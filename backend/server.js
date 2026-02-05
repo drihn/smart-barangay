@@ -1,120 +1,169 @@
+// server.js - CORRECT BACKEND SERVER
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
 const mysql = require('mysql2');
 
-console.log('🚀 Creating Smart Barangay Database');
-console.log('='.repeat(60));
+const app = express();
 
-// CORRECT PASSWORD - with capital I
-const mysqlUrl = 'mysql://root:rXyORFyQitdNyUdebCegvImGWJcPfBhD@gondola.proxy.rlwy.net:51241/railway';
+// CORS
+app.use(cors({
+  origin: ['https://smart-barangay.vercel.app', 'http://localhost:3000'],
+  credentials: true
+}));
+app.use(express.json());
 
-console.log('🔗 Using:', mysqlUrl.replace(/:[^:]*@/, ':****@'));
+/* ========== DATABASE CONNECTION ========== */
+console.log('🚀 Smart Barangay Backend Starting...');
+
+let db;
 
 try {
-  const url = new URL(mysqlUrl);
+  const mysqlUrl = process.env.MYSQL_URL;
   
-  const connection = mysql.createConnection({
+  if (!mysqlUrl) {
+    console.log('❌ MYSQL_URL not found in environment');
+    process.exit(1);
+  }
+  
+  console.log('✅ Using MYSQL_URL from Railway');
+  
+  const url = new URL(mysqlUrl);
+  db = mysql.createPool({
     host: url.hostname,
     port: url.port || 3306,
     user: url.username,
     password: url.password,
     database: url.pathname.replace('/', '') || 'railway',
-    ssl: { rejectUnauthorized: false },
-    connectTimeout: 10000
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    ssl: { rejectUnauthorized: false }
   });
   
-  connection.connect((err) => {
+  // Test connection
+  db.getConnection((err, connection) => {
     if (err) {
-      console.log('❌ Connection failed:', err.message);
-      return;
-    }
-    
-    console.log('✅ Connected to Railway MySQL!');
-    
-    // Execute statements ONE BY ONE
-    const statements = [
-      // 1. Drop table if exists
-      'DROP TABLE IF EXISTS users',
-      
-      // 2. Create users table
-      `CREATE TABLE users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        first_name VARCHAR(100) NOT NULL,
-        email VARCHAR(100) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        role ENUM('admin', 'citizen') DEFAULT 'citizen',
-        status ENUM('pending', 'approve', 'reject') DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )`,
-      
-      // 3. Insert sample data
-      `INSERT INTO users (first_name, email, password, role, status) VALUES
-      ('Admin User', 'admin@barangay.com', 'admin123', 'admin', 'approve'),
-      ('Juan Dela Cruz', 'juan@email.com', 'citizen123', 'citizen', 'approve'),
-      ('Maria Santos', 'maria@email.com', 'maria123', 'citizen', 'approve'),
-      ('Pedro Reyes', 'pedro@email.com', 'pedro123', 'citizen', 'pending'),
-      ('Ana Lopez', 'ana@email.com', 'ana123', 'citizen', 'reject')`
-    ];
-    
-    let currentStep = 0;
-    
-    function executeNextStatement() {
-      if (currentStep >= statements.length) {
-        console.log('✅ All statements executed!');
-        verifyData();
-        return;
-      }
-      
-      console.log(`📝 Executing step ${currentStep + 1}/${statements.length}...`);
-      connection.query(statements[currentStep], (err, result) => {
-        if (err) {
-          console.log(`❌ Step ${currentStep + 1} failed:`, err.message);
-          console.log('SQL:', statements[currentStep].substring(0, 100) + '...');
-        } else {
-          console.log(`✅ Step ${currentStep + 1} successful`);
-          currentStep++;
-          executeNextStatement();
+      console.log('❌ Database Connection Failed:', err.message);
+    } else {
+      console.log('✅ Connected to Railway MySQL Database!');
+      connection.query('SELECT COUNT(*) as count FROM users', (queryErr, result) => {
+        if (!queryErr) {
+          console.log(`📊 Total users in database: ${result[0].count}`);
         }
-      });
-    }
-    
-    executeNextStatement();
-    
-    function verifyData() {
-      console.log('\n📊 Verifying database...');
-      
-      connection.query('SELECT COUNT(*) as count FROM users', (err, result) => {
-        if (err) {
-          console.log('⚠️ Cannot count users:', err.message);
-        } else {
-          console.log(`✅ Total users: ${result[0].count}`);
-          
-          connection.query('SELECT * FROM users', (selectErr, users) => {
-            if (selectErr) {
-              console.log('⚠️ Cannot fetch users:', selectErr.message);
-            } else {
-              console.log('\n📋 Users in database:');
-              console.log('   ID  Name              Email                     Role     Status');
-              console.log('   --- ----------------- ------------------------ -------- ---------');
-              users.forEach(user => {
-                console.log(`   ${user.id.toString().padEnd(3)} ${user.first_name.padEnd(17)} ${user.email.padEnd(24)} ${user.role.padEnd(8)} ${user.status}`);
-              });
-            }
-            
-            console.log('\n' + '='.repeat(60));
-            console.log('🎉 DATABASE CREATION COMPLETE!');
-            console.log('='.repeat(60));
-            
-            // Get connection URL for backend
-            console.log('\n💡 Add this to your backend service MYSQL_URL:');
-            console.log(`   ${mysqlUrl}`);
-            
-            connection.end();
-          });
-        }
+        connection.release();
       });
     }
   });
   
 } catch (error) {
-  console.log('❌ Error:', error.message);
+  console.error('🔥 Database setup error:', error.message);
 }
+
+/* ========== ROUTES ========== */
+
+// Home
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: '✅ Smart Barangay Backend is LIVE!',
+    database: db ? 'Connected' : 'Disconnected',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Health check
+app.get('/health', async (req, res) => {
+  try {
+    const [result] = await db.promise().query('SELECT 1 as test');
+    const [users] = await db.promise().query('SELECT COUNT(*) as count FROM users');
+    
+    res.json({
+      success: true,
+      status: 'healthy',
+      database: 'connected',
+      test: result[0].test,
+      totalUsers: users[0].count,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      status: 'unhealthy',
+      error: error.message
+    });
+  }
+});
+
+// Test database
+app.get('/api/test', async (req, res) => {
+  try {
+    const [users] = await db.promise().query('SELECT id, first_name, email, role, status FROM users');
+    res.json({
+      success: true,
+      totalUsers: users.length,
+      users: users
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Citizen login (existing)
+app.post("/citizen-login", async (req, res) => {
+  const { email, password } = req.body;
+  
+  try {
+    const [users] = await db.promise().query(
+      "SELECT * FROM users WHERE email = ?",
+      [email]
+    );
+
+    if (users.length === 0)
+      return res.status(401).json({ success: false, error: "Email not found" });
+
+    const user = users[0];
+
+    if (user.password !== password)
+      return res.status(401).json({ success: false, error: "Incorrect password" });
+
+    if (user.status !== 'approve')
+      return res.status(401).json({ success: false, error: `Account not approved. Status: ${user.status}` });
+
+    res.json({
+      success: true,
+      message: "Login successful",
+      citizen: {
+        id: user.id,
+        first_name: user.first_name,
+        email: user.email,
+        role: user.role || "citizen"
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Login error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
+});
+
+// Add other routes...
+
+/* ========== START SERVER ========== */
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log('\n' + '='.repeat(60));
+  console.log(`🚀 BACKEND SERVER STARTED ON PORT ${PORT}`);
+  console.log(`🌐 Local: http://localhost:${PORT}`);
+  console.log(`🌐 Railway: https://smart-barangay-production.up.railway.app`);
+  console.log('='.repeat(60));
+  console.log('\n📡 Available endpoints:');
+  console.log(`   GET  /         - Server status`);
+  console.log(`   GET  /health   - Health check`);
+  console.log(`   GET  /api/test - Test database`);
+  console.log(`   POST /citizen-login - User login`);
+  console.log('='.repeat(60));
+});
