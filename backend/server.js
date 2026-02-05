@@ -9,8 +9,9 @@ const app = express();
 
 // CORS
 app.use(cors({
-  origin: ['https://smart-barangay.vercel.app', 'http://localhost:3000'],
+  origin: ['https://smart-barangay.vercel.app', 'http://localhost:3000', 'http://localhost:5173'],
   credentials: true
+  
 }));
 app.use(express.json());
 
