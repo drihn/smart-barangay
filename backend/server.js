@@ -8,33 +8,62 @@ const mysql = require('mysql2');
 const app = express();
 
 // CORS - UPDATED VERSION
-app.use(cors({
+// CORS - FIXED VERSION
+const cors = require('cors');
+
+// Define allowed origins
+const allowedOrigins = [
+  'https://smart-barangay.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5000',
+  'https://smart-barangay-production.up.railway.app'
+];
+
+const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    // Allow requests with no origin (like mobile apps, curl, postman)
+    if (!origin) {
+      console.log('🌐 CORS: Request with no origin (server-to-server or curl)');
+      return callback(null, true);
+    }
     
-    const allowedOrigins = [
-      'https://smart-barangay.vercel.app',
-      'http://localhost:3000',
-      'http://localhost:5173',
-      'http://localhost:5000'
-    ];
-    
+    // Check if origin is in allowed list
     if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log(`✅ CORS: Allowed origin ${origin}`);
       callback(null, true);
     } else {
-      // Allow any localhost or Railway preview URLs
-      if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('vercel.app')) {
+      // Allow any Railway preview URLs or development URLs
+      const isDev = origin.includes('localhost') || 
+                    origin.includes('127.0.0.1') || 
+                    origin.includes('vercel.app') ||
+                    origin.includes('railway.app') ||
+                    origin.includes('vercel.sh');
+      
+      if (isDev) {
+        console.log(`⚠️  CORS: Development origin allowed: ${origin}`);
         callback(null, true);
       } else {
+        console.log(`❌ CORS: Blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Length', 'Content-Type'],
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
+
 /* ========== DATABASE CONNECTION ========== */
 console.log('🚀 Smart Barangay Backend Starting...');
 
@@ -97,6 +126,19 @@ app.get('/', (req, res) => {
 // Health check
 app.get('/health', async (req, res) => {
   try {
+    // Add CORS headers explicitly
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    
+    if (!db) {
+      return res.status(500).json({
+        success: false,
+        status: 'unhealthy',
+        error: 'Database not connected',
+        timestamp: new Date().toISOString()
+      });
+    }
+
     const [result] = await db.promise().query('SELECT 1 as test');
     const [users] = await db.promise().query('SELECT COUNT(*) as count FROM users');
     
@@ -106,13 +148,15 @@ app.get('/health', async (req, res) => {
       database: 'connected',
       test: result[0].test,
       totalUsers: users[0].count,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      cors: 'enabled'
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       status: 'unhealthy',
-      error: error.message
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -409,6 +453,41 @@ app.post("/admin-login", async (req, res) => {
       error: "Server error" 
     });
   }
+});
+
+// ========== ERROR HANDLING MIDDLEWARE ==========
+
+// Handle CORS errors
+app.use((err, req, res, next) => {
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({
+      success: false,
+      error: 'CORS Error: Origin not allowed',
+      allowedOrigins: allowedOrigins,
+      yourOrigin: req.headers.origin || 'No origin header'
+    });
+  }
+  next(err);
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: `Route ${req.method} ${req.url} not found`
+  });
+});
+
+// General error handler
+app.use((err, req, res, next) => {
+  console.error('🔥 Server Error:', err);
+  res.status(500).json({
+    success: false,
+    error: process.env.NODE_ENV === 'production' 
+      ? 'Internal server error' 
+      : err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
 });
 
 /* ========== START SERVER ========== */
