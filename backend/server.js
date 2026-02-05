@@ -415,6 +415,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('🚀 BACKEND SERVER STARTED SUCCESSFULLY!');
   console.log(`📍 Port: ${PORT}`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🌐 Public URL: https://smart-barangay-production.up.railway.app`);
   console.log('='.repeat(60));
   console.log('\n📋 AVAILABLE ENDPOINTS:');
   console.log(`1. GET  http://localhost:${PORT}/`);
