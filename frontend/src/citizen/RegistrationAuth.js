@@ -14,62 +14,82 @@ function RegistrationAuth() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Handle registration - DIRECT FETCH to Railway backend
-  const handleRegistration = async (e) => {
-    e.preventDefault();
+ const handleRegistration = async (e) => {
+  e.preventDefault();
 
-    // Check passwords match
-    if (password !== confirmPassword) {
-      alert("Passwords do not match!");
+  // Check passwords match
+  if (password !== confirmPassword) {
+    alert("Passwords do not match!");
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    // DIRECT API call to Railway backend
+    const API_URL = process.env.REACT_APP_API_URL || 'https://smart-barangay-production.up.railway.app';
+    
+    console.log('🌐 API URL:', API_URL);
+    console.log('📤 Sending:', { email, fullName });
+    
+    const response = await fetch(`${API_URL}/signup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        full_name: fullName,
+        email: email,
+        password: password
+      })
+    });
+
+    console.log('📥 Response status:', response.status);
+    
+    // CHECK IF RESPONSE IS JSON FIRST
+    const contentType = response.headers.get('content-type');
+    
+    if (!contentType || !contentType.includes('application/json')) {
+      // Not JSON - get as text
+      const text = await response.text();
+      console.error('❌ Server returned non-JSON:', text);
+      alert(`Server error: ${text.substring(0, 100)}`);
       return;
     }
+    
+    // Parse as JSON
+    const data = await response.json();
+    console.log('📦 Response data:', data);
 
-    setLoading(true);
-
-    try {
-      // DIRECT API call to Railway backend
-      const API_URL = process.env.REACT_APP_API_URL || 'https://smart-barangay-production.up.railway.app';
+    // Check if registration is successful
+    if (data.success) {
+      alert(data.message || "Registration successful - pending approval");
       
-      console.log('Registering with:', API_URL); // Debug
+      // Clear form
+      setFullName("");
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
       
-      const response = await fetch(`${API_URL}/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          full_name: fullName,
-          email: email,
-          password: password
-        })
-      });
-
-      const data = await response.json();
-      console.log('Response:', data); // Debug
-
-      // Check if registration is successful
-      if (data.success) {
-        alert(data.message || "Registration successful - pending approval");
-        
-        // Clear form
-        setFullName("");
-        setEmail("");
-        setPassword("");
-        setConfirmPassword("");
-        
-        // Navigate to success page or stay on form
-        navigate("/registration-complete");
-      } else {
-        alert(data.error || "Registration failed");
-      }
-      
-    } catch (err) {
-      console.error("Registration error:", err);
-      alert("Cannot connect to server. Please try again.");
-    } finally {
-      setLoading(false);
+      // Navigate to success page
+      navigate("/registration-complete");
+    } else {
+      alert(data.error || "Registration failed");
     }
-  };
+    
+  } catch (err) {
+    console.error("🔥 Registration error:", err);
+    console.error("🔥 Error details:", err.message);
+    
+    if (err.message.includes('JSON')) {
+      alert("Server returned invalid response. Check if /signup endpoint exists.");
+    } else {
+      alert("Cannot connect to server. Please try again.");
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="auth-container" style={{ backgroundImage: `url(${bg})` }}>
