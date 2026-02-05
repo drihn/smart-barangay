@@ -17,7 +17,9 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:5000',
-  'https://smart-barangay-production.up.railway.app'
+  'https://smart-barangay-production.up.railway.app',
+  'https://build-23bm4430j-drihns-projects.vercel.app'
+  
 ];
 
 const corsOptions = {
