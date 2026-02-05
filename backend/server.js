@@ -3,7 +3,14 @@ const cors = require('cors');
 const mysql = require('mysql2');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://smart-barangay.vercel.app',  // DITO: palitan ng aktwal na Vercel domain mo
+    'http://localhost:3000'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+}));
 app.use(express.json());
 
 /* ================== RAILWAY MYSQL CONNECTION ================== */
