@@ -98,16 +98,21 @@ app.get('/health', async (req, res) => {
 // Test database
 app.get('/api/test', async (req, res) => {
   try {
-    const [users] = await db.promise().query('SELECT id, first_name, email, role, status FROM users');
+    const [users] = await db.promise().query(
+      'SELECT id, first_name, email, role, status FROM users ORDER BY id DESC'
+    );
+    
     res.json({
       success: true,
       totalUsers: users.length,
-      users: users
+      users: users,
+      message: 'Database connection successful'
     });
-  } catch (error) {
+  } catch (err) {
+    console.error('❌ Database test error:', err);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: err.message
     });
   }
 });
@@ -150,7 +155,136 @@ app.post("/citizen-login", async (req, res) => {
   }
 });
 
-// Add other routes...
+// ========== ADMIN ENDPOINTS ==========
+
+// Get pending users
+app.get('/api/pending-users', async (req, res) => {
+  console.log('📥 Fetching pending users...');
+  
+  try {
+    const [rows] = await db.promise().query(
+      `SELECT id, first_name, email, status, created_at
+       FROM users 
+       WHERE status = 'pending'
+       ORDER BY id DESC`
+    );
+
+    console.log(`✅ Found ${rows.length} pending users`);
+    res.json({ 
+      success: true, 
+      users: rows, 
+      count: rows.length 
+    });
+  } catch (error) {
+    console.error('❌ Error fetching pending users:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch pending users' 
+    });
+  }
+});
+
+// Approve user
+app.post('/api/approve-user', async (req, res) => {
+  const { userId } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'User ID is required' 
+    });
+  }
+  
+  try {
+    const [check] = await db.promise().query(
+      'SELECT id, first_name, email, status FROM users WHERE id = ?',
+      [userId]
+    );
+    
+    if (check.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: `User ID ${userId} not found` 
+      });
+    }
+    
+    const [result] = await db.promise().query(
+      'UPDATE users SET status = "approve" WHERE id = ?',
+      [userId]
+    );
+    
+    const [updated] = await db.promise().query(
+      'SELECT id, first_name, email, status FROM users WHERE id = ?',
+      [userId]
+    );
+    
+    res.json({ 
+      success: true, 
+      message: 'User approved successfully',
+      affectedRows: result.affectedRows,
+      user: updated[0]
+    });
+    
+  } catch (error) {
+    console.error(`❌ Error approving user ${userId}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to approve user',
+      details: error.message
+    });
+  }
+});
+
+// Reject user
+app.post('/api/reject-user', async (req, res) => {
+  const { userId } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'User ID is required' 
+    });
+  }
+  
+  try {
+    const [check] = await db.promise().query(
+      'SELECT id, first_name, email, status FROM users WHERE id = ?',
+      [userId]
+    );
+    
+    if (check.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: `User ID ${userId} not found` 
+      });
+    }
+    
+    const [result] = await db.promise().query(
+      'UPDATE users SET status = "reject" WHERE id = ?',
+      [userId]
+    );
+    
+    const [updated] = await db.promise().query(
+      'SELECT id, first_name, email, status FROM users WHERE id = ?',
+      [userId]
+    );
+    
+    res.json({ 
+      success: true, 
+      message: 'User rejected successfully',
+      affectedRows: result.affectedRows,
+      user: updated[0]
+    });
+    
+  } catch (error) {
+    console.error(`❌ Error rejecting user ${userId}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to reject user',
+      details: error.message
+    });
+  }
+});
 
 /* ========== START SERVER ========== */
 const PORT = process.env.PORT || 5000;
