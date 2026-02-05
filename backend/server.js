@@ -1,189 +1,83 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const mysql = require('mysql2');
-
-const app = express();
-
-// CORS - simple muna
-app.use(cors({
-  origin: '*',  // Allow all muna for testing
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
-}));
-
-app.use(express.json());
-
-/* ========== DATABASE CONNECTION ========== */
-console.log('🚀 Starting Smart Barangay Backend...');
+/* ========== SIMPLE RAILWAY DATABASE CONNECTION ========== */
+console.log('🚀 Starting Smart Barangay Backend');
 
 let db;
 
 try {
-  // Sa Railway, automatic may MYSQL_URL
-  // Sa local, gagamit tayo ng .env file
+  // SA RAILWAY: Dapat meron na ito sa variables mo
   const mysqlUrl = process.env.MYSQL_URL;
   
-  if (mysqlUrl) {
-    console.log('📡 Connecting to Railway MySQL...');
-    // For Railway
-    const url = new URL(mysqlUrl);
-    db = mysql.createPool({
-      host: url.hostname,
-      port: url.port || 3306,
-      user: url.username,
-      password: url.password,
-      database: url.pathname.replace('/', ''),
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0,
-      ssl: { rejectUnauthorized: false }
-    });
-    console.log('✅ Configured for Railway');
-  } else {
-    console.log('💻 Connecting to Local MySQL...');
-    // For local development
-    db = mysql.createPool({
-      host: 'localhost',
-      port: 3306,
-      user: 'root',
-      password: 'Barangay123!',
-      database: 'smart_barangay',
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0
-    });
-    console.log('✅ Configured for Local');
+  if (!mysqlUrl) {
+    console.log('❌ ERROR: MYSQL_URL not found in environment variables');
+    console.log('💡 Go to backend service → Variables tab → Add MYSQL_URL');
+    process.exit(1);
   }
+  
+  console.log('✅ Found MYSQL_URL');
+  console.log('📡 Connecting to Railway MySQL...');
+  
+  // Parse the URL
+  const url = new URL(mysqlUrl);
+  
+  console.log('🔗 Connection details:');
+  console.log(`   Host: ${url.hostname}`);
+  console.log(`   Database: ${url.pathname.replace('/', '')}`);
+  console.log(`   User: ${url.username}`);
+  
+  db = mysql.createPool({
+    host: url.hostname,
+    port: url.port || 3306,
+    user: url.username,
+    password: url.password,
+    database: url.pathname.replace('/', '') || 'railway',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    ssl: { rejectUnauthorized: false }, // IMPORTANTE: Required for Railway
+    connectTimeout: 10000
+  });
   
   // Test connection
   db.getConnection((err, connection) => {
     if (err) {
-      console.log('❌ Database Connection Failed:');
+      console.log('❌ DATABASE CONNECTION FAILED:');
       console.log('   Error:', err.message);
+      console.log('   Code:', err.code);
+      
+      if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+        console.log('   🔑 Password might be wrong in MYSQL_URL');
+        console.log('   💡 Check if password in URL is correct');
+      }
     } else {
-      console.log('✅ Connected to MySQL successfully!');
-      connection.release();
+      console.log('✅ SUCCESS! Connected to Railway MySQL');
+      console.log('   Thread ID:', connection.threadId);
+      
+      // Test query
+      connection.query('SELECT DATABASE() as db_name', (queryErr, results) => {
+        if (queryErr) {
+          console.log('⚠️  Query failed:', queryErr.message);
+        } else {
+          console.log(`✅ Database: ${results[0].db_name}`);
+          
+          // Check tables
+          connection.query('SHOW TABLES', (tableErr, tables) => {
+            if (tableErr) {
+              console.log('⚠️  Cannot list tables:', tableErr.message);
+            } else {
+              console.log(`📋 Tables found: ${tables.length}`);
+              tables.forEach(table => {
+                const tableName = Object.values(table)[0];
+                console.log(`   - ${tableName}`);
+              });
+            }
+            connection.release();
+          });
+        }
+      });
     }
   });
   
 } catch (error) {
-  console.error('🔥 Database error:', error.message);
+  console.error('🔥 Setup error:', error.message);
+  process.exit(1);
 }
-
-/* ========== ROUTES ========== */
-
-// Basic test route
-app.get('/', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Smart Barangay Backend is running!',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Test database connection
-app.get('/test-db', async (req, res) => {
-  try {
-    const [result] = await db.promise().query('SELECT 1 + 1 AS test');
-    res.json({
-      success: true,
-      message: 'Database is working',
-      test: result[0].test
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Check users table
-app.get('/users', async (req, res) => {
-  try {
-    const [users] = await db.promise().query('SELECT * FROM users LIMIT 10');
-    res.json({
-      success: true,
-      count: users.length,
-      users: users
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Simple login (temporary)
-app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  
-  try {
-    const [users] = await db.promise().query(
-      'SELECT * FROM users WHERE email = ? AND password = ?',
-      [email, password]
-    );
-    
-    if (users.length === 0) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid email or password'
-      });
-    }
-    
-    const user = users[0];
-    res.json({
-      success: true,
-      user: {
-        id: user.id,
-        name: user.first_name,
-        email: user.email,
-        role: user.role
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Simple signup (temporary)
-app.post('/signup', async (req, res) => {
-  const { name, email, password } = req.body;
-  
-  try {
-    const [result] = await db.promise().query(
-      'INSERT INTO users (first_name, email, password, role, status) VALUES (?, ?, ?, "citizen", "pending")',
-      [name, email, password]
-    );
-    
-    res.json({
-      success: true,
-      message: 'Registration successful - pending approval',
-      userId: result.insertId
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-/* ========== START SERVER ========== */
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`\n✅ Server running on port ${PORT}`);
-  console.log(`🌐 Local: http://localhost:${PORT}`);
-  console.log(`🌐 Railway: https://smart-barangay-production.up.railway.app`);
-  console.log('\n📡 Available endpoints:');
-  console.log(`   GET  /        - Server status`);
-  console.log(`   GET  /test-db - Test database`);
-  console.log(`   GET  /users   - List users`);
-  console.log(`   POST /login   - User login`);
-  console.log(`   POST /signup  - User registration`);
-  console.log('='.repeat(50));
-});
