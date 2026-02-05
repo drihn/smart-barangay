@@ -38,7 +38,7 @@ export default function ChangePasswordPage() {
       }
 
       // I-send ang request sa backend API
-      const response = await fetch("http://localhost:5000/api/change-password", {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/change-password`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

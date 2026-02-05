@@ -20,7 +20,7 @@ export default function AdminHomePage() {
     setLoadingUsers(true);
     try {
       // Use the new endpoint from your server.js
-      const response = await fetch("http://localhost:5000/pending-users");
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/pending-users`);
       const data = await response.json();
       
       if (response.ok && data.success) {
@@ -48,7 +48,7 @@ export default function AdminHomePage() {
   const handleApproveReject = async (userId, approve) => {
     try {
       const endpoint = approve ? "approve-user" : "reject-user";
-      const response = await fetch(`http://localhost:5000/${endpoint}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId })

@@ -6,7 +6,7 @@ import bg from "../assets/bg.jpg";
 import BurgerMenu from "../components/BurgerMenu";
 
 // API URL Configuration
-const API_URL = "http://localhost:5000";
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
 export default function PendingAccountsPage() {
   const navigate = useNavigate();

@@ -18,7 +18,7 @@ function ProfilePage({ currentUser }) {
     const fetchUserDetails = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`http://localhost:5000/api/users/${currentUser._id}`, {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/${currentUser._id}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
