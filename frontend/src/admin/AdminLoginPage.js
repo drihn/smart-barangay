@@ -24,7 +24,7 @@ export default function AdminLoginPage({ onLogin }) {  // ✅ ADD onLogin prop
     setLoading(true);
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/admin-login`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}admin-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
