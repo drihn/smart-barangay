@@ -10,7 +10,7 @@ app.use(express.json());
 const db = mysql.createPool({
   host: "mysql.railway.internal",
   user: "root",
-  password: "rXyORFyQitdNyUdebCegvImGWJcPfbhD",
+  password: "mysql://root:rXyORFyQitdNyUdebCegvImGWJcPfBhD@mysql.railway.internal:3306/railway",
   database: "railway",
   waitForConnections: true,
   connectionLimit: 10,
