@@ -7,11 +7,11 @@ const mysql = require('mysql2');
 
 const app = express();
 
-// CORS - UPDATED VERSION
-// CORS - FIXED VERSION
-const cors = require('cors');
+// ⭐⭐⭐ IMPORTANTE: DAPAT NASA TAAS ITO ⭐⭐⭐
+// 1. JSON parsing middleware
+app.use(express.json());
 
-// Define allowed origins
+// 2. CORS middleware
 const allowedOrigins = [
   'https://smart-barangay.vercel.app',
   'http://localhost:3000',
@@ -19,23 +19,19 @@ const allowedOrigins = [
   'http://localhost:5000',
   'https://smart-barangay-production.up.railway.app',
   'https://build-23bm4430j-drihns-projects.vercel.app'
-  
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, postman)
     if (!origin) {
-      console.log('🌐 CORS: Request with no origin (server-to-server or curl)');
+      console.log('🌐 CORS: Request with no origin');
       return callback(null, true);
     }
     
-    // Check if origin is in allowed list
     if (allowedOrigins.indexOf(origin) !== -1) {
       console.log(`✅ CORS: Allowed origin ${origin}`);
       callback(null, true);
     } else {
-      // Allow any Railway preview URLs or development URLs
       const isDev = origin.includes('localhost') || 
                     origin.includes('127.0.0.1') || 
                     origin.includes('vercel.app') ||
@@ -55,15 +51,11 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Content-Length', 'Content-Type'],
-  maxAge: 86400, // 24 hours
-  preflightContinue: false,
+  maxAge: 86400,
   optionsSuccessStatus: 204
 };
 
-// Apply CORS middleware
 app.use(cors(corsOptions));
-
-// Handle preflight requests
 app.options('*', cors(corsOptions));
 
 /* ========== DATABASE CONNECTION ========== */
@@ -113,7 +105,82 @@ try {
   console.error('🔥 Database setup error:', error.message);
 }
 
-/* ========== ROUTES ========== */
+/* ========== ADD THESE ENDPOINTS ========== */
+
+// 1. Setup Admin Endpoint (ADD THIS)
+app.post("/setup-admin", async (req, res) => {
+  console.log('🔧 Setting up admin user...');
+  
+  try {
+    // Check if admin exists
+    const [existing] = await db.promise().query(
+      "SELECT id, email, role FROM users WHERE email = 'admin@barangay.com' AND role = 'admin'"
+    );
+    
+    if (existing.length > 0) {
+      return res.json({
+        success: true,
+        message: "Admin already exists",
+        user: existing[0]
+      });
+    }
+    
+    // Create admin
+    const [result] = await db.promise().query(
+      `INSERT INTO users (first_name, email, password, status, role, created_at) 
+       VALUES (?, ?, ?, 'approve', 'admin', NOW())`,
+      ['System Administrator', 'admin@barangay.com', 'admin123']
+    );
+    
+    res.json({
+      success: true,
+      message: "✅ Admin user created!",
+      credentials: {
+        email: "admin@barangay.com",
+        password: "admin123"
+      },
+      userId: result.insertId
+    });
+    
+  } catch (error) {
+    console.error('❌ Setup error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// 2. Test JSON Endpoint (ADD THIS)
+app.post("/test-json", (req, res) => {
+  console.log('📦 Test endpoint hit! Body:', req.body);
+  
+  res.json({
+    success: true,
+    message: "JSON parsing is working!",
+    yourData: req.body,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 3. Get All Users Endpoint (ADD THIS)
+app.get("/api/all-users", async (req, res) => {
+  try {
+    const [users] = await db.promise().query(
+      "SELECT id, first_name, email, role, status, created_at FROM users ORDER BY id"
+    );
+    
+    res.json({
+      success: true,
+      count: users.length,
+      users: users
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ========== EXISTING ROUTES ========== */
 
 // Home
 app.get('/', (req, res) => {
@@ -127,10 +194,9 @@ app.get('/', (req, res) => {
 
 // Health check
 app.get('/health', async (req, res) => {
-  // SIGURADUHIN na JSON ang response
   try {
     if (!db) {
-      return res.status(500).json({  // DAPAT .json()
+      return res.status(500).json({
         success: false,
         status: 'unhealthy',
         error: 'Database not connected'
@@ -140,7 +206,7 @@ app.get('/health', async (req, res) => {
     const [result] = await db.promise().query('SELECT 1 as test');
     const [users] = await db.promise().query('SELECT COUNT(*) as count FROM users');
     
-    res.json({  // Gamitin ang res.json() hindi res.send()
+    res.json({
       success: true,
       status: 'healthy',
       database: 'connected',
@@ -149,7 +215,6 @@ app.get('/health', async (req, res) => {
     });
     
   } catch (error) {
-    // DAPAT .json() din sa error
     res.status(500).json({
       success: false,
       status: 'unhealthy',
@@ -180,7 +245,7 @@ app.get('/api/test', async (req, res) => {
   }
 });
 
-// Citizen login (existing)
+// Citizen login
 app.post("/citizen-login", async (req, res) => {
   const { email, password } = req.body;
   
@@ -218,9 +283,56 @@ app.post("/citizen-login", async (req, res) => {
   }
 });
 
+// Admin login
+app.post("/admin-login", async (req, res) => {
+  const { email, password } = req.body;
+
+  console.log('🔐 Admin login attempt:', email);
+
+  try {
+    const [users] = await db.promise().query(
+      "SELECT * FROM users WHERE email = ? AND role = 'admin'",
+      [email]
+    );
+
+    if (users.length === 0) {
+      return res.status(401).json({ 
+        success: false, 
+        error: "Admin not found" 
+      });
+    }
+
+    const user = users[0];
+
+    if (user.password !== password) {
+      return res.status(401).json({ 
+        success: false, 
+        error: "Incorrect password" 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Admin login successful",
+      admin: {
+        id: user.id,
+        first_name: user.first_name,
+        email: user.email,
+        role: user.role
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Admin login error:", err);
+    res.status(500).json({ 
+      success: false, 
+      error: "Server error" 
+    });
+  }
+});
+
 // ========== ADMIN ENDPOINTS ==========
 
-// Get pending users
 app.get('/api/pending-users', async (req, res) => {
   console.log('📥 Fetching pending users...');
   
@@ -247,7 +359,6 @@ app.get('/api/pending-users', async (req, res) => {
   }
 });
 
-// Approve user
 app.post('/api/approve-user', async (req, res) => {
   const { userId } = req.body;
   
@@ -298,7 +409,6 @@ app.post('/api/approve-user', async (req, res) => {
   }
 });
 
-// Reject user
 app.post('/api/reject-user', async (req, res) => {
   const { userId } = req.body;
   
@@ -349,8 +459,6 @@ app.post('/api/reject-user', async (req, res) => {
   }
 });
 
-// ========== USER REGISTRATION ==========
-
 // Signup
 app.post("/signup", async (req, res) => {
   const { full_name, email, password } = req.body;
@@ -358,7 +466,6 @@ app.post("/signup", async (req, res) => {
   console.log('📝 New registration:', { email, full_name });
 
   try {
-    // Check if email already exists
     const [existingUsers] = await db.promise().query(
       "SELECT id FROM users WHERE email = ?",
       [email]
@@ -371,7 +478,6 @@ app.post("/signup", async (req, res) => {
       });
     }
 
-    // Insert new user with pending status
     const sql = `INSERT INTO users (first_name, email, password, status, role)
                  VALUES (?, ?, ?, 'pending', 'citizen')`;
 
@@ -402,59 +508,7 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-// ========== ADMIN LOGIN ==========
-
-// Admin login
-app.post("/admin-login", async (req, res) => {
-  const { email, password } = req.body;
-
-  console.log('🔐 Admin login attempt:', email);
-
-  try {
-    const [users] = await db.promise().query(
-      "SELECT * FROM users WHERE email = ? AND role = 'admin'",
-      [email]
-    );
-
-    if (users.length === 0) {
-      return res.status(401).json({ 
-        success: false, 
-        error: "Admin not found" 
-      });
-    }
-
-    const user = users[0];
-
-    if (user.password !== password) {
-      return res.status(401).json({ 
-        success: false, 
-        error: "Incorrect password" 
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Admin login successful",
-      admin: {
-        id: user.id,
-        first_name: user.first_name,
-        email: user.email,
-        role: user.role
-      }
-    });
-
-  } catch (err) {
-    console.error("❌ Admin login error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: "Server error" 
-    });
-  }
-});
-
-// ========== ERROR HANDLING MIDDLEWARE ==========
-
-// Handle CORS errors
+/* ========== ERROR HANDLING ========== */
 app.use((err, req, res, next) => {
   if (err.message === 'Not allowed by CORS') {
     return res.status(403).json({
@@ -467,7 +521,6 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -475,7 +528,6 @@ app.use((req, res) => {
   });
 });
 
-// General error handler
 app.use((err, req, res, next) => {
   console.error('🔥 Server Error:', err);
   res.status(500).json({
@@ -496,9 +548,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 Railway: https://smart-barangay-production.up.railway.app`);
   console.log('='.repeat(60));
   console.log('\n📡 Available endpoints:');
-  console.log(`   GET  /         - Server status`);
-  console.log(`   GET  /health   - Health check`);
-  console.log(`   GET  /api/test - Test database`);
-  console.log(`   POST /citizen-login - User login`);
+  console.log(`   POST /setup-admin      - Create admin user`);
+  console.log(`   POST /test-json        - Test JSON parsing`);
+  console.log(`   GET  /api/all-users    - List all users`);
+  console.log(`   POST /admin-login      - Admin login`);
   console.log('='.repeat(60));
 });
