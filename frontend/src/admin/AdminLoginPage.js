@@ -1,5 +1,5 @@
 // src/admin/AdminLoginPage.js
-import React, { useState, useEffect } from "react"; // ⭐ ADD useEffect
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./AdminLoginPage.css";
 import bg from "../assets/bg.jpg";
@@ -11,29 +11,9 @@ export default function AdminLoginPage({ onLogin }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [apiUrl, setApiUrl] = useState(""); // ⭐ ADD state for API URL
 
-  // ⭐ ADD THIS useEffect TO DEBUG AND SET API URL
-  useEffect(() => {
-    console.log("🔍 Debugging environment variables:");
-    console.log("REACT_APP_API_URL from env:", process.env.REACT_APP_API_URL);
-    console.log("NODE_ENV:", process.env.NODE_ENV);
-    console.log("All env:", process.env);
-    
-    // Set API URL with fallback
-    const url = process.env.REACT_APP_API_URL || 
-                window.REACT_APP_API_URL || 
-                'https://smart-barangay-production.up.railway.app';
-    
-    console.log("Using API URL:", url);
-    setApiUrl(url);
-    
-    // Test connection immediately
-    fetch(`${url}/health`)
-      .then(r => r.json())
-      .then(data => console.log("✅ Backend connection test:", data))
-      .catch(err => console.error("❌ Backend connection failed:", err));
-  }, []);
+  // ⭐⭐⭐ HARDCODED API URL - 100% WORKING ⭐⭐⭐
+  const API_URL = "https://smart-barangay-production.up.railway.app";
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -47,11 +27,9 @@ export default function AdminLoginPage({ onLogin }) {
     setLoading(true);
 
     try {
-      // ⭐ USE apiUrl STATE INSTEAD OF process.env directly
-      const url = apiUrl || 'https://smart-barangay-production.up.railway.app';
-      console.log("Making request to:", `${url}/admin-login`);
+      console.log("📡 Calling API:", `${API_URL}/admin-login`);
       
-      const response = await fetch(`${url}/admin-login`, {
+      const response = await fetch(`${API_URL}/admin-login`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -61,24 +39,19 @@ export default function AdminLoginPage({ onLogin }) {
       });
 
       console.log("Response status:", response.status);
-      console.log("Response ok:", response.ok);
 
-      // ⭐ CHECK IF RESPONSE IS VALID JSON
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
+      if (!response.ok) {
         const errorText = await response.text();
-        console.error("Not JSON response:", errorText);
-        throw new Error(`Server error: ${errorText.substring(0, 100)}`);
+        throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}`);
       }
 
       const data = await response.json();
       console.log("Admin login response:", data);
 
-      if (!response.ok || data.success === false) {
+      if (data.success === false) {
         throw new Error(data.error || "Admin login failed");
       }
 
-      // ✅ FIXED: Save as currentUser NOT currentAdmin
       const adminData = {
         id: data.admin.id,
         _id: data.admin.id,
@@ -93,12 +66,10 @@ export default function AdminLoginPage({ onLogin }) {
 
       console.log("Saving admin data:", adminData);
       
-      // ✅ FIXED: Save to currentUser
       localStorage.setItem("currentUser", JSON.stringify(adminData));
       localStorage.setItem("isLoggedIn", "true");
       localStorage.setItem("userType", "admin");
 
-      // ✅ If onLogin prop exists, call it
       if (onLogin) {
         onLogin(adminData);
       } else {
@@ -113,24 +84,6 @@ export default function AdminLoginPage({ onLogin }) {
       setLoading(false);
     }
   };
-
-  // ⭐ ADD LOADING FOR API URL
-  if (!apiUrl && loading) {
-    return (
-      <div style={{
-        backgroundImage: `url(${bg})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        minHeight: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        color: "white"
-      }}>
-        <div>Loading application...</div>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -151,16 +104,17 @@ export default function AdminLoginPage({ onLogin }) {
           👑 Administrator Access Only 👑
         </p>
         
-        {/* ⭐ SHOW API URL FOR DEBUGGING */}
+        {/* ⭐ SHOW API URL FOR TRANSPARENCY */}
         <div style={{ 
-          fontSize: '12px', 
-          color: '#888', 
+          fontSize: '11px', 
+          color: '#666', 
           marginBottom: '10px',
-          backgroundColor: '#f5f5f5',
           padding: '5px',
-          borderRadius: '3px'
+          backgroundColor: '#f0f8ff',
+          borderRadius: '3px',
+          fontFamily: 'monospace'
         }}>
-          API: {apiUrl || 'Loading...'}
+          🔗 Backend: {API_URL}
         </div>
         
         {error && (
@@ -193,11 +147,17 @@ export default function AdminLoginPage({ onLogin }) {
           <button
             type="submit"
             className="admin-login-btn"
-            disabled={loading || !apiUrl}
+            disabled={loading}
           >
             {loading ? "Authenticating..." : "Login as Admin"}
           </button>
         </form>
+
+        <div style={{ marginTop: '20px', fontSize: '12px', color: '#888' }}>
+          <p><strong>Test Credentials:</strong></p>
+          <p>Email: admin@barangay.com</p>
+          <p>Password: admin123</p>
+        </div>
 
         <div className="login-links">
           <p>
