@@ -1,83 +1,28 @@
-// server.js - CORRECT BACKEND SERVER
-
+// server.js - SMART BARANGAY BACKEND (SIMPLIFIED VERSION)
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const mysql = require('mysql2');
 
 const app = express();
 
-// ⭐⭐⭐ IMPORTANTE: DAPAT NASA TAAS ITO ⭐⭐⭐
-// 1. JSON parsing middleware
+// ⭐⭐⭐ SUPER SIMPLE CORS - ALWAYS ALLOWS EVERYTHING ⭐⭐⭐
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
 app.use(express.json());
 
-// 2. CORS middleware
-const allowedOrigins = [
-  'https://smart-barangay.vercel.app',
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:5000',
-  'https://smart-barangay-production.up.railway.app',
-  'https://build-23bm4430j-drihns-projects.vercel.app'
-];
-
-const corsOptions = {
-  origin: function (origin, callback) {
-    console.log('🌐 CORS Check - Origin:', origin);
-    
-    // ⭐⭐⭐ FIX: Allow null/undefined origins ⭐⭐⭐
-    if (!origin || origin === 'null') {
-      console.log('🌐 Allowing: No origin or null origin');
-      return callback(null, true);
-    }
-    
-    // Define allowed origins
-    const allowedOrigins = [
-      'https://smart-barangay.vercel.app',
-      'http://localhost:3000',
-      'http://localhost:5173',
-      'http://localhost:5000',
-      'https://smart-barangay-production.up.railway.app',
-      'https://build-23bm4430j-drihns-projects.vercel.app',
-      'http://localhost:8080',
-      'http://127.0.0.1:3000',
-      'https://localhost:3000',
-    ];
-    
-    // Check if origin is in allowed list
-    if (allowedOrigins.includes(origin)) {
-      console.log(`✅ CORS: Allowing origin ${origin}`);
-      return callback(null, true);
-    }
-    
-    // Allow any development URLs
-    const isDev = origin.includes('localhost') || 
-                  origin.includes('127.0.0.1') || 
-                  origin.includes('vercel.app') ||
-                  origin.includes('railway.app') ||
-                  origin.includes('vercel.sh') ||
-                  origin.includes('ngrok.io') ||
-                  origin.includes('web.app');
-    
-    if (isDev) {
-      console.log(`⚠️  CORS: Development origin allowed: ${origin}`);
-      return callback(null, true);
-    }
-    
-    console.log(`❌ CORS: Blocked origin: ${origin}`);
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 204
-};
-
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
-
-/* ========== DATABASE CONNECTION ========== */
-console.log('🚀 Smart Barangay Backend Starting...');
+// ========== DATABASE CONNECTION ==========
+console.log('🚀 Starting Smart Barangay Backend...');
 
 let db;
 
@@ -85,11 +30,11 @@ try {
   const mysqlUrl = process.env.MYSQL_URL;
   
   if (!mysqlUrl) {
-    console.log('❌ MYSQL_URL not found in environment');
+    console.log('❌ MYSQL_URL not found');
     process.exit(1);
   }
   
-  console.log('✅ Using MYSQL_URL from Railway');
+  console.log('✅ Using Railway MySQL');
   
   const url = new URL(mysqlUrl);
   db = mysql.createPool({
@@ -109,10 +54,10 @@ try {
     if (err) {
       console.log('❌ Database Connection Failed:', err.message);
     } else {
-      console.log('✅ Connected to Railway MySQL Database!');
+      console.log('✅ Connected to MySQL Database!');
       connection.query('SELECT COUNT(*) as count FROM users', (queryErr, result) => {
         if (!queryErr) {
-          console.log(`📊 Total users in database: ${result[0].count}`);
+          console.log(`📊 Total users: ${result[0].count}`);
         }
         connection.release();
       });
@@ -120,93 +65,28 @@ try {
   });
   
 } catch (error) {
-  console.error('🔥 Database setup error:', error.message);
+  console.error('🔥 Database error:', error.message);
 }
 
-/* ========== ADD THESE ENDPOINTS ========== */
+// ========== BASIC ENDPOINTS ==========
 
-// 1. Setup Admin Endpoint (ADD THIS)
-app.post("/setup-admin", async (req, res) => {
-  console.log('🔧 Setting up admin user...');
-  
-  try {
-    // Check if admin exists
-    const [existing] = await db.promise().query(
-      "SELECT id, email, role FROM users WHERE email = 'admin@barangay.com' AND role = 'admin'"
-    );
-    
-    if (existing.length > 0) {
-      return res.json({
-        success: true,
-        message: "Admin already exists",
-        user: existing[0]
-      });
-    }
-    
-    // Create admin
-    const [result] = await db.promise().query(
-      `INSERT INTO users (first_name, email, password, status, role, created_at) 
-       VALUES (?, ?, ?, 'approve', 'admin', NOW())`,
-      ['System Administrator', 'admin@barangay.com', 'admin123']
-    );
-    
-    res.json({
-      success: true,
-      message: "✅ Admin user created!",
-      credentials: {
-        email: "admin@barangay.com",
-        password: "admin123"
-      },
-      userId: result.insertId
-    });
-    
-  } catch (error) {
-    console.error('❌ Setup error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// 2. Test JSON Endpoint (ADD THIS)
-app.post("/test-json", (req, res) => {
-  console.log('📦 Test endpoint hit! Body:', req.body);
-  
-  res.json({
-    success: true,
-    message: "JSON parsing is working!",
-    yourData: req.body,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// 3. Get All Users Endpoint (ADD THIS)
-app.get("/api/all-users", async (req, res) => {
-  try {
-    const [users] = await db.promise().query(
-      "SELECT id, first_name, email, role, status, created_at FROM users ORDER BY id"
-    );
-    
-    res.json({
-      success: true,
-      count: users.length,
-      users: users
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ========== EXISTING ROUTES ========== */
-
-// Home
+// Root - Server status
 app.get('/', (req, res) => {
   res.json({
     success: true,
     message: '✅ Smart Barangay Backend is LIVE!',
     database: db ? 'Connected' : 'Disconnected',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    endpoints: [
+      'GET  /health',
+      'GET  /users',
+      'POST /admin-login',
+      'POST /citizen-login',
+      'POST /signup',
+      'GET  /pending',
+      'POST /approve/:id',
+      'POST /reject/:id'
+    ]
   });
 });
 
@@ -214,13 +94,9 @@ app.get('/', (req, res) => {
 app.get('/health', async (req, res) => {
   try {
     if (!db) {
-      return res.status(500).json({
-        success: false,
-        status: 'unhealthy',
-        error: 'Database not connected'
-      });
+      return res.json({ success: false, error: 'Database not connected' });
     }
-
+    
     const [result] = await db.promise().query('SELECT 1 as test');
     const [users] = await db.promise().query('SELECT COUNT(*) as count FROM users');
     
@@ -228,43 +104,69 @@ app.get('/health', async (req, res) => {
       success: true,
       status: 'healthy',
       database: 'connected',
-      test: result[0].test,
-      totalUsers: users[0].count
+      users: users[0].count,
+      timestamp: new Date().toISOString()
     });
-    
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      status: 'unhealthy',
-      error: error.message
-    });
+    res.json({ success: false, error: error.message });
   }
 });
 
-// Test database
-app.get('/api/test', async (req, res) => {
+// Get all users
+app.get('/users', async (req, res) => {
   try {
     const [users] = await db.promise().query(
-      'SELECT id, first_name, email, role, status FROM users ORDER BY id DESC'
+      'SELECT id, first_name, email, role, status, created_at FROM users ORDER BY id'
     );
+    
+    res.json({ success: true, count: users.length, users });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// ========== AUTHENTICATION ==========
+
+// Admin login
+app.post('/admin-login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  console.log('🔐 Admin login:', email);
+  
+  try {
+    const [users] = await db.promise().query(
+      "SELECT * FROM users WHERE email = ? AND role = 'admin'",
+      [email]
+    );
+    
+    if (users.length === 0) {
+      return res.json({ success: false, error: 'Admin not found' });
+    }
+    
+    const user = users[0];
+    
+    if (user.password !== password) {
+      return res.json({ success: false, error: 'Incorrect password' });
+    }
     
     res.json({
       success: true,
-      totalUsers: users.length,
-      users: users,
-      message: 'Database connection successful'
+      message: 'Login successful',
+      admin: {
+        id: user.id,
+        name: user.first_name,
+        email: user.email,
+        role: user.role
+      }
     });
-  } catch (err) {
-    console.error('❌ Database test error:', err);
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
+    
+  } catch (error) {
+    res.json({ success: false, error: error.message });
   }
 });
 
 // Citizen login
-app.post("/citizen-login", async (req, res) => {
+app.post('/citizen-login', async (req, res) => {
   const { email, password } = req.body;
   
   try {
@@ -272,303 +174,222 @@ app.post("/citizen-login", async (req, res) => {
       "SELECT * FROM users WHERE email = ?",
       [email]
     );
-
-    if (users.length === 0)
-      return res.status(401).json({ success: false, error: "Email not found" });
-
+    
+    if (users.length === 0) {
+      return res.json({ success: false, error: 'User not found' });
+    }
+    
     const user = users[0];
-
-    if (user.password !== password)
-      return res.status(401).json({ success: false, error: "Incorrect password" });
-
-    if (user.status !== 'approve')
-      return res.status(401).json({ success: false, error: `Account not approved. Status: ${user.status}` });
-
+    
+    if (user.password !== password) {
+      return res.json({ success: false, error: 'Incorrect password' });
+    }
+    
+    if (user.status !== 'approve') {
+      return res.json({ success: false, error: `Account ${user.status}` });
+    }
+    
     res.json({
       success: true,
-      message: "Login successful",
+      message: 'Login successful',
       citizen: {
         id: user.id,
-        first_name: user.first_name,
+        name: user.first_name,
         email: user.email,
-        role: user.role || "citizen"
+        role: user.role || 'citizen'
       }
     });
-
-  } catch (err) {
-    console.error("❌ Login error:", err);
-    res.status(500).json({ success: false, error: "Server error" });
-  }
-});
-
-// Admin login
-app.post("/admin-login", async (req, res) => {
-  const { email, password } = req.body;
-
-  console.log('🔐 Admin login attempt:', email);
-
-  try {
-    const [users] = await db.promise().query(
-      "SELECT * FROM users WHERE email = ? AND role = 'admin'",
-      [email]
-    );
-
-    if (users.length === 0) {
-      return res.status(401).json({ 
-        success: false, 
-        error: "Admin not found" 
-      });
-    }
-
-    const user = users[0];
-
-    if (user.password !== password) {
-      return res.status(401).json({ 
-        success: false, 
-        error: "Incorrect password" 
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Admin login successful",
-      admin: {
-        id: user.id,
-        first_name: user.first_name,
-        email: user.email,
-        role: user.role
-      }
-    });
-
-  } catch (err) {
-    console.error("❌ Admin login error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: "Server error" 
-    });
-  }
-});
-
-// ========== ADMIN ENDPOINTS ==========
-
-app.get('/api/pending-users', async (req, res) => {
-  console.log('📥 Fetching pending users...');
-  
-  try {
-    const [rows] = await db.promise().query(
-      `SELECT id, first_name, email, status, created_at
-       FROM users 
-       WHERE status = 'pending'
-       ORDER BY id DESC`
-    );
-
-    console.log(`✅ Found ${rows.length} pending users`);
-    res.json({ 
-      success: true, 
-      users: rows, 
-      count: rows.length 
-    });
-  } catch (error) {
-    console.error('❌ Error fetching pending users:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch pending users' 
-    });
-  }
-});
-
-app.post('/api/approve-user', async (req, res) => {
-  const { userId } = req.body;
-  
-  if (!userId) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'User ID is required' 
-    });
-  }
-  
-  try {
-    const [check] = await db.promise().query(
-      'SELECT id, first_name, email, status FROM users WHERE id = ?',
-      [userId]
-    );
-    
-    if (check.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        error: `User ID ${userId} not found` 
-      });
-    }
-    
-    const [result] = await db.promise().query(
-      'UPDATE users SET status = "approve" WHERE id = ?',
-      [userId]
-    );
-    
-    const [updated] = await db.promise().query(
-      'SELECT id, first_name, email, status FROM users WHERE id = ?',
-      [userId]
-    );
-    
-    res.json({ 
-      success: true, 
-      message: 'User approved successfully',
-      affectedRows: result.affectedRows,
-      user: updated[0]
-    });
     
   } catch (error) {
-    console.error(`❌ Error approving user ${userId}:`, error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to approve user',
-      details: error.message
-    });
+    res.json({ success: false, error: error.message });
   }
 });
 
-app.post('/api/reject-user', async (req, res) => {
-  const { userId } = req.body;
-  
-  if (!userId) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'User ID is required' 
-    });
-  }
-  
-  try {
-    const [check] = await db.promise().query(
-      'SELECT id, first_name, email, status FROM users WHERE id = ?',
-      [userId]
-    );
-    
-    if (check.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        error: `User ID ${userId} not found` 
-      });
-    }
-    
-    const [result] = await db.promise().query(
-      'UPDATE users SET status = "reject" WHERE id = ?',
-      [userId]
-    );
-    
-    const [updated] = await db.promise().query(
-      'SELECT id, first_name, email, status FROM users WHERE id = ?',
-      [userId]
-    );
-    
-    res.json({ 
-      success: true, 
-      message: 'User rejected successfully',
-      affectedRows: result.affectedRows,
-      user: updated[0]
-    });
-    
-  } catch (error) {
-    console.error(`❌ Error rejecting user ${userId}:`, error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to reject user',
-      details: error.message
-    });
-  }
-});
-
-// Signup
-app.post("/signup", async (req, res) => {
+// User registration
+app.post('/signup', async (req, res) => {
   const { full_name, email, password } = req.body;
-
-  console.log('📝 New registration:', { email, full_name });
-
+  
+  console.log('📝 New signup:', email);
+  
   try {
-    const [existingUsers] = await db.promise().query(
+    // Check if email exists
+    const [existing] = await db.promise().query(
       "SELECT id FROM users WHERE email = ?",
       [email]
     );
-
-    if (existingUsers.length > 0) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Email already exists" 
-      });
+    
+    if (existing.length > 0) {
+      return res.json({ success: false, error: 'Email already exists' });
     }
-
-    const sql = `INSERT INTO users (first_name, email, password, status, role)
-                 VALUES (?, ?, ?, 'pending', 'citizen')`;
-
-    const [result] = await db.promise().query(sql, [full_name, email, password]);
-
-    console.log('✅ User registered:', result.insertId);
+    
+    // Create user
+    const [result] = await db.promise().query(
+      `INSERT INTO users (first_name, email, password, status, role) 
+       VALUES (?, ?, ?, 'pending', 'citizen')`,
+      [full_name, email, password]
+    );
     
     res.json({
       success: true,
-      message: "Registration successful - pending approval",
+      message: 'Registration successful - pending approval',
       userId: result.insertId
     });
-
-  } catch (err) {
-    console.error("❌ Registration error:", err);
     
-    if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Email already exists" 
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// ========== ADMIN FUNCTIONS ==========
+
+// Get pending users
+app.get('/pending', async (req, res) => {
+  try {
+    const [users] = await db.promise().query(
+      `SELECT id, first_name, email, status, created_at 
+       FROM users WHERE status = 'pending' ORDER BY id DESC`
+    );
+    
+    res.json({ success: true, count: users.length, users });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// Approve user
+app.post('/approve/:id', async (req, res) => {
+  const userId = req.params.id;
+  
+  try {
+    const [result] = await db.promise().query(
+      "UPDATE users SET status = 'approve' WHERE id = ?",
+      [userId]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.json({ success: false, error: 'User not found' });
+    }
+    
+    res.json({ success: true, message: 'User approved' });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// Reject user
+app.post('/reject/:id', async (req, res) => {
+  const userId = req.params.id;
+  
+  try {
+    const [result] = await db.promise().query(
+      "UPDATE users SET status = 'reject' WHERE id = ?",
+      [userId]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.json({ success: false, error: 'User not found' });
+    }
+    
+    res.json({ success: true, message: 'User rejected' });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// Create admin user (for setup)
+app.post('/create-admin', async (req, res) => {
+  try {
+    // Check if admin exists
+    const [existing] = await db.promise().query(
+      "SELECT * FROM users WHERE email = 'admin@barangay.com'"
+    );
+    
+    if (existing.length > 0) {
+      return res.json({
+        success: true,
+        message: 'Admin already exists',
+        admin: existing[0]
       });
     }
-
-    res.status(500).json({ 
-      success: false, 
-      error: "Registration failed" 
+    
+    // Create admin
+    const [result] = await db.promise().query(
+      `INSERT INTO users (first_name, email, password, status, role) 
+       VALUES (?, ?, ?, 'approve', 'admin')`,
+      ['System Admin', 'admin@barangay.com', 'admin123']
+    );
+    
+    res.json({
+      success: true,
+      message: 'Admin user created',
+      credentials: {
+        email: 'admin@barangay.com',
+        password: 'admin123'
+      }
     });
+    
+  } catch (error) {
+    res.json({ success: false, error: error.message });
   }
 });
 
-/* ========== ERROR HANDLING ========== */
-app.use((err, req, res, next) => {
-  if (err.message === 'Not allowed by CORS') {
-    return res.status(403).json({
-      success: false,
-      error: 'CORS Error: Origin not allowed',
-      allowedOrigins: allowedOrigins,
-      yourOrigin: req.headers.origin || 'No origin header'
-    });
-  }
-  next(err);
+// ========== TEST ENDPOINTS ==========
+
+// Test JSON parsing
+app.post('/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Test endpoint working!',
+    yourData: req.body,
+    timestamp: new Date().toISOString()
+  });
 });
 
+// Test database
+app.get('/test-db', async (req, res) => {
+  try {
+    const [users] = await db.promise().query('SELECT * FROM users LIMIT 5');
+    res.json({ success: true, users });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// ========== ERROR HANDLING ==========
+
+// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    error: `Route ${req.method} ${req.url} not found`
+    error: `Endpoint ${req.method} ${req.url} not found`
   });
 });
 
-app.use((err, req, res, next) => {
-  console.error('🔥 Server Error:', err);
+// Error handler
+app.use((error, req, res, next) => {
+  console.error('🔥 Server Error:', error);
   res.status(500).json({
     success: false,
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
-      : err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    error: 'Internal server error'
   });
 });
 
-/* ========== START SERVER ========== */
+// ========== START SERVER ==========
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log('\n' + '='.repeat(60));
-  console.log(`🚀 BACKEND SERVER STARTED ON PORT ${PORT}`);
+  console.log(`🚀 SERVER RUNNING ON PORT ${PORT}`);
   console.log(`🌐 Local: http://localhost:${PORT}`);
   console.log(`🌐 Railway: https://smart-barangay-production.up.railway.app`);
   console.log('='.repeat(60));
-  console.log('\n📡 Available endpoints:');
-  console.log(`   POST /setup-admin      - Create admin user`);
-  console.log(`   POST /test-json        - Test JSON parsing`);
-  console.log(`   GET  /api/all-users    - List all users`);
-  console.log(`   POST /admin-login      - Admin login`);
+  console.log('\n📡 ENDPOINTS:');
+  console.log('   GET  /              - Server status');
+  console.log('   GET  /health        - Health check');
+  console.log('   GET  /users         - All users');
+  console.log('   POST /admin-login   - Admin login');
+  console.log('   POST /citizen-login - Citizen login');
+  console.log('   POST /signup        - Register');
+  console.log('   GET  /pending       - Pending users');
+  console.log('   POST /create-admin  - Create admin');
   console.log('='.repeat(60));
 });
