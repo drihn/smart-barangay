@@ -23,35 +23,53 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin) {
-      console.log('🌐 CORS: Request with no origin');
+    console.log('🌐 CORS Check - Origin:', origin);
+    
+    // ⭐⭐⭐ FIX: Allow null/undefined origins ⭐⭐⭐
+    if (!origin || origin === 'null') {
+      console.log('🌐 Allowing: No origin or null origin');
       return callback(null, true);
     }
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      console.log(`✅ CORS: Allowed origin ${origin}`);
-      callback(null, true);
-    } else {
-      const isDev = origin.includes('localhost') || 
-                    origin.includes('127.0.0.1') || 
-                    origin.includes('vercel.app') ||
-                    origin.includes('railway.app') ||
-                    origin.includes('vercel.sh');
-      
-      if (isDev) {
-        console.log(`⚠️  CORS: Development origin allowed: ${origin}`);
-        callback(null, true);
-      } else {
-        console.log(`❌ CORS: Blocked origin: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
-      }
+    // Define allowed origins
+    const allowedOrigins = [
+      'https://smart-barangay.vercel.app',
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:5000',
+      'https://smart-barangay-production.up.railway.app',
+      'https://build-23bm4430j-drihns-projects.vercel.app',
+      'http://localhost:8080',
+      'http://127.0.0.1:3000',
+      'https://localhost:3000',
+    ];
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      console.log(`✅ CORS: Allowing origin ${origin}`);
+      return callback(null, true);
     }
+    
+    // Allow any development URLs
+    const isDev = origin.includes('localhost') || 
+                  origin.includes('127.0.0.1') || 
+                  origin.includes('vercel.app') ||
+                  origin.includes('railway.app') ||
+                  origin.includes('vercel.sh') ||
+                  origin.includes('ngrok.io') ||
+                  origin.includes('web.app');
+    
+    if (isDev) {
+      console.log(`⚠️  CORS: Development origin allowed: ${origin}`);
+      return callback(null, true);
+    }
+    
+    console.log(`❌ CORS: Blocked origin: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  exposedHeaders: ['Content-Length', 'Content-Type'],
-  maxAge: 86400,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   optionsSuccessStatus: 204
 };
 
